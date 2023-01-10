@@ -1,0 +1,110 @@
+#!/bin/sh
+export USE_CCACHE=1
+export CCACHE_EXEC=/usr/bin/ccache
+
+set -e
+
+help() {
+    printf "Usage: `basename $0` [OPTIONS]
+
+Options:
+    --branch,-b     Set the branch to be used
+    --brand,-B      Set the device's brand to be used
+    --device,-d     Set the device's codename to be used
+    --clean,-c      Clean and remove the building directory
+    --help,-h\n"
+}
+
+check_dependencies()
+{
+    for f in git yay
+    do
+        if test ! -x "`command -v $f`"
+        then
+            echo "ERROR: $f was not found"
+            exit 1
+        fi
+    done
+
+    if test -x "`command -v yay`"
+    then
+        sudo pacman -S --needed --noconfirm libxcrypt-compat
+        yay -Syu lineageos-devel --needed --noconfirm
+    else
+        git -C "/tmp" clone https://aur.archlinux.org/yay.git
+	    cd "/tmp/yay" && makepkg -cirs --noconfirm
+    fi
+
+    return $?
+}
+
+if test -z "$1"
+then
+    help
+    exit 1
+fi
+
+while getopts ':b:B:d:c:t:' arg
+do
+    case "$arg" in
+        b) branch="$OPTARG";;
+        B) device_brand="$OPTARG";;
+        d) device_codename="$OPTARG";;
+        t) build_type="$OPTARG";;
+        c) rm -rf lineage-$branch;;
+        ?) help;;
+    esac
+done
+
+if test -z "$branch"
+then
+    echo "No branch was specified"
+    exit 1
+elif test -z "$device_brand"
+then
+    echo "No device brand was specified"
+    exit 1
+elif test -z "$device_codename"
+then
+    echo "No device codename was specified"
+    exit 1
+elif test -z "$build_type"
+then
+   echo "No build type was specified"
+   exit 1
+else
+    printf "LineageOS branch: $branch\nDevice brand: $device_brand\nDevice codename: $device_codename\nBuild type: $build_type\n"
+    read -p "Is this information correct? [Y/N]: " validateInformation
+    case "${validateInformation}" in
+        N|n|no|No) echo "Exiting..." && exit 1;;
+    esac
+fi
+
+if test ! -d "pixel-$branch"
+then
+    mkdir -v "pixel-$branch"
+elif test ! -d "pixel-$branch/.repo/local_manifests"
+then
+    mkdir -v "pixel-$branch/.repo/local_manifests"
+fi
+
+if test -x "`command -v repo`"
+then
+    echo "Initializing LineageOS source tree..."
+    repo init -u https://github.com/LineageOS/android.git -b "$branch"
+else
+    echo "ERROR: repo: command not found"
+    exit 1
+fi
+
+echo "Downloading LineageOS source tree..."
+repo sync -c -j `nproc --all` --force-sync --no-clone-bundle --no-tags
+
+echo "Setting up environment..."
+. build/envsetup.sh && ccache -M 50G && ccache -o compression=true
+
+echo "Building 'aosp_${device_codename}-${build_type}'..."
+breakfast "${device_codename}" && \
+    make idegen && \
+    lunch aosp_${device_codename}-$build_type && \
+    mka bacon -j `nproc --all`
