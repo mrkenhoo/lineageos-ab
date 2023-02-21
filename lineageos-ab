@@ -82,7 +82,7 @@ fi
 
 if test ! -d "$branch/.repo/local_manifests"
 then
-    mkdir -v "$branch/.repo/local_manifests"
+    mkdir -pv "$branch/.repo/local_manifests"
 fi
 
 if test -x "`command -v repo`"
