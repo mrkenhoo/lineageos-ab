@@ -51,7 +51,7 @@ do
         B) device_brand="$OPTARG";;
         d) device_codename="$OPTARG";;
         t) build_type="$OPTARG";;
-        c) rm -rf lineage-$branch;;
+        c) rm -rfv $branch;;
         ?) help;;
     esac
 done
@@ -80,18 +80,15 @@ else
     esac
 fi
 
-if test ! -d "pixel-$branch"
+if test ! -d "$branch/.repo/local_manifests"
 then
-    mkdir -v "pixel-$branch"
-elif test ! -d "pixel-$branch/.repo/local_manifests"
-then
-    mkdir -v "pixel-$branch/.repo/local_manifests"
+    mkdir -v "$branch/.repo/local_manifests"
 fi
 
 if test -x "`command -v repo`"
 then
     echo "Initializing LineageOS source tree..."
-    repo init -u https://github.com/LineageOS/android.git -b "$branch"
+    repo init -u https://github.com/LineageOS/android.git -b $branch
 else
     echo "ERROR: repo: command not found"
     exit 1
@@ -103,8 +100,8 @@ repo sync -c -j `nproc --all` --force-sync --no-clone-bundle --no-tags
 echo "Setting up environment..."
 . build/envsetup.sh && ccache -M 50G && ccache -o compression=true
 
-echo "Building 'aosp_${device_codename}-${build_type}'..."
-breakfast "${device_codename}" && \
+echo "Building 'aosp_$device_codename-$build_type'..."
+breakfast "$device_codename" && \
     make idegen && \
-    lunch aosp_${device_codename}-$build_type && \
+    lunch aosp_$device_codename-$build_type && \
     mka bacon -j `nproc --all`
